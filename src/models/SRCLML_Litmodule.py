@@ -108,7 +108,7 @@ class SRCLMLLitModule(LightningModule):
         self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self) -> Dict[str, Any]:
-        optimizer = self.hparams.optimizer(params=self.trainer.model.parameters(), weight_decay=1e-5)
+        optimizer = self.hparams.optimizer(params=self.trainer.model.parameters())
         return {"optimizer": optimizer}
 
 if __name__ == "__main__":
