@@ -1,7 +1,10 @@
 import json
-from torch import Tensor
+import torch
+from torch import tensor
 from torch_geometric.data import HeteroData
 from torch_geometric.nn import LightGCN
+
+from seqencoder import SequenceEncoder
 
 VERBOSE = True
 SHOW_API_NOT_EXIT = False
@@ -68,40 +71,45 @@ def load_node_json(path_dict, encoders=None):
                 edges_invoke[0].append(app_index)
                 edges_invoke[1].append(api_index)
             else:
-                # TODO: 
+                # TODO:
                 if SHOW_API_NOT_EXIT:
                     print(f"{api} not exit!")
 
         if encoders is not None:
             # TODO: 添加Transformer来获得description的嵌入
             raise NotImplementedError
-        
-        data = HeteroData()
 
-        num_apps = len(app_mapping)
-        num_apis = len(api_mapping)
-        num_app_tags = len(app_tags_list)
-        num_api_tags = len(api_tags_list)
+    if VERBOSE:
+        print("preparation done.")
 
-        # TODO: how to determine num_node_feat
-        data['app'].x = Tensor(num_apps, NODE_FEATURE)
-        data['api'].x = Tensor(num_apis, NODE_FEATURE)
-        data['app_tags'].x = Tensor(num_app_tags, NODE_FEATURE)
-        data['api_tags'].x = Tensor(num_api_tags, NODE_FEATURE)
+    data = HeteroData()
 
-        # data['app', 'invoke', 'api'].edge_index = (edges_invoke) # [2, num_edges_invoke]
-        # data['app', 'app_has_tag', 'app_tag'].edge_index = (edges_app_has_tag) # [2, num_edges_has_tag]
-        # data['api', 'api_has_tag', 'api_tag'].edge_index = (edges_api_has_tag) # [2, num_edges_has_tag]
-        # TODO: torch.Tensor() is too slow
+    num_apps = len(app_mapping)
+    num_apis = len(api_mapping)
+    num_app_tags = len(app_tags_list)
+    num_api_tags = len(api_tags_list)
 
-        data['app', 'invoke', 'api'].edge_index = Tensor(edges_invoke) # [2, num_edges_invoke]
-        data['app', 'app_has_tag', 'app_tag'].edge_index = Tensor(edges_app_has_tag) # [2, num_edges_has_tag]
-        data['api', 'api_has_tag', 'api_tag'].edge_index = Tensor(edges_api_has_tag) # [2, num_edges_has_tag]
+    # TODO: 如何确定num_node_dim
+    data['app'].x = torch.ones(num_apps, NODE_FEATURE)
+    data['api'].x = torch.ones(num_apis, NODE_FEATURE)
+    data['app_tags'].x = torch.ones(num_app_tags, NODE_FEATURE)
+    data['api_tags'].x = torch.ones(num_api_tags, NODE_FEATURE)
 
-        # TODO: how to use lighgcn
-        LightGCN_invoke = LightGCN(num_apps + num_apis, NODE_FEATURE, 3)
-        LightGCN_app_has_tag = LightGCN(num_apps + num_app_tags, NODE_FEATURE, 3)
-        LightGCN_api_has_tag = LightGCN(num_apis + num_api_tags, NODE_FEATURE, 3)
+    # TODO: torch.Tensor() 有点慢
+    # data['app', 'invoke', 'api'].edge_index = (edges_invoke) # [2, num_edges_invoke]
+    # data['app', 'app_has_tag', 'app_tag'].edge_index = (edges_app_has_tag) # [2, num_edges_has_tag]
+    # data['api', 'api_has_tag', 'api_tag'].edge_index = (edges_api_has_tag) # [2, num_edges_has_tag]
+
+    data['app', 'invoke', 'api'].edge_index = tensor(edges_invoke, dtype=torch.long) # [2, num_edges_invoke]
+    data['app', 'app_has_tag', 'app_tag'].edge_index = tensor(edges_app_has_tag, dtype=torch.long) # [2, num_edges_has_tag]
+    data['api', 'api_has_tag', 'api_tag'].edge_index = tensor(edges_api_has_tag, dtype=torch.long) # [2, num_edges_has_tag]
+    if VERBOSE:
+        print("nodes and edges done.")
+
+    # TODO: 如何使用LightGCN
+    LightGCN_invoke = LightGCN(num_apps + num_apis, NODE_FEATURE, 3)
+    LightGCN_app_has_tag = LightGCN(num_apps + num_app_tags, NODE_FEATURE, 3)
+    LightGCN_api_has_tag = LightGCN(num_apis + num_api_tags, NODE_FEATURE, 3)
 
     return api_mapping, app_mapping, api_tags_mapping, app_tags_mapping, data
 
@@ -116,3 +124,4 @@ if __name__ == '__main__':
     api_mapping, app_mapping, api_tags_mapping, app_tags_mapping, data = load_node_json(path_dict)
 
     print(len(api_mapping))
+    print(data)

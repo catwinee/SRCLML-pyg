@@ -5,6 +5,7 @@ from torch import nn
 import json
 
 from torch_geometric.data import HeteroData
+from seqencoder import SequenceEncoder
 
 # src/data/components/load_json.py
 from load_json import load_node_json
