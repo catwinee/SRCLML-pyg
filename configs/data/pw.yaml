@@ -1,0 +1,2 @@
+_target_: src.data.pw_datamodule.PWDataModule
+batch_size: 32 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)

@@ -5,22 +5,31 @@ import dgl
 from torch.nn import functional as F
 
 from lightning import LightningModule
+from torch_geometric.data import HeteroData
 from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
 
-from components import SRCLML
-
+from components.SRCLML import SRCLML
 
 class SRCLMLLitModule(LightningModule):
-    def __init__( self, net: torch.nn.Module, lambda1, lambda2) -> None:
+    def __init__(
+            self,
+            net: torch.nn.Module,
+            invoke_subgraph, app_tag_subgraph, api_tag_subgraph,
+            embd_dim, num_layers,
+        ) -> None:
         super().__init__()
 
         self.save_hyperparameters(logger=False)
 
-        self.net = net
+        self.net = SRCLML(
+            invoke_subgraph, app_tag_subgraph, api_tag_subgraph,
+            embd_dim, num_layers,
+        )
 
         self.criterion = self.net.loss_func
 
+        # torchmetrics
         self.train_acc = Accuracy(task="multiclass", num_classes=10)
         self.val_acc = Accuracy(task="multiclass", num_classes=10)
         self.test_acc = Accuracy(task="multiclass", num_classes=10)
@@ -31,53 +40,28 @@ class SRCLMLLitModule(LightningModule):
 
         self.val_acc_best = MaxMetric()
 
-    def forward(self, x: dgl.DGLGraph, t: torch.Tensor) -> torch.Tensor:
-        return self.net(x, t)
+    def forward(self, x, t: torch.Tensor) -> torch.Tensor:
+        invoke_sample, app_tag_sample, api_tag_sample = x
+        return self.net(invoke_sample, app_tag_sample, api_tag_sample)
 
     def on_train_start(self) -> None:
         self.val_loss.reset()
         self.val_acc.reset()
         self.val_acc_best.reset()
 
-    def bpr_loss(self, pos_scores: torch.Tensor, neg_scores: torch.Tensor) -> torch.Tensor:
-        return -torch.mean(F.logsigmoid(pos_scores - neg_scores))
-
-    def sample_pairs(self, interaction_matrix: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        pos_indices = interaction_matrix.nonzero(as_tuple=False)
-        neg_indices = (interaction_matrix == 0).nonzero(as_tuple=False)
-        pos_samples = pos_indices[torch.randint(len(pos_indices), (len(pos_indices),))]
-        neg_samples = neg_indices[torch.randint(len(neg_indices), (len(pos_indices),))]
-        return pos_samples, neg_samples
-
     def model_step(
         self, batch: Tuple[Dict[str, Any], torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # SRCLML 无需采样
         inputs, y = batch
         text_features = inputs['text']
         graph_features = inputs['graph']
 
         logits = self.forward(text_features, graph_features)
-        
-        O_as, O_at, O_st = inputs['O_as'], inputs['O_at'], inputs['O_st']
-        pos_as, neg_as = self.sample_pairs(O_as)
-        pos_at, neg_at = self.sample_pairs(O_at)
-        pos_st, neg_st = self.sample_pairs(O_st)
+        loss = torch.tensor(1, ) # TODO
 
-        pos_scores_as = logits[pos_as[:, 0], pos_as[:, 1]]
-        neg_scores_as = logits[neg_as[:, 0], neg_as[:, 1]]
-        pos_scores_at = logits[pos_at[:, 0], pos_at[:, 1]]
-        neg_scores_at = logits[neg_at[:, 0], neg_at[:, 1]]
-        pos_scores_st = logits[pos_st[:, 0], pos_st[:, 1]]
-        neg_scores_st = logits[neg_st[:, 0], neg_st[:, 1]]
-
-        loss_as = self.bpr_loss(pos_scores_as, neg_scores_as)
-        loss_at = self.bpr_loss(pos_scores_at, neg_scores_at)
-        loss_st = self.bpr_loss(pos_scores_st, neg_scores_st)
-
-        loss = loss_as + loss_at + loss_st \
-            + self.lambda1 * (loss_a + loss_s)
-        
         preds = torch.argmax(logits, dim=1)
+        # TODO: paper 3.6 -> preds
         return loss, preds, y
 
     def training_step(
