@@ -59,7 +59,7 @@ class SRCLML(nn.Module):
 
         for index in tqdm(loader):
             # Sample positive and negative labels.
-            pos_edge_label_index = subgraph[edge_type]['app', 'invoke', 'api'].edge_index
+            pos_edge_label_index = subgraph[edge_type].edge_index
             neg_edge_label_index = torch.stack([
                 pos_edge_label_index[0],
                 torch.randint(num_first, num_first + num_second,
@@ -70,7 +70,7 @@ class SRCLML(nn.Module):
                 neg_edge_label_index,
             ], dim=1)
 
-            # optimizer要用吗？
+            # TODO:optimizer要用吗？
             # optimizer.zero_grad()
             pos_rank, neg_rank = model(subgraph[edge_type].edge_index, edge_label_index).chunk(2)
 
